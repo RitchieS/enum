@@ -4,6 +4,7 @@ go 1.18
 
 require (
 	github.com/projectdiscovery/dnsx v1.1.0
+	github.com/projectdiscovery/gologger v1.1.4
 	github.com/projectdiscovery/subfinder/v2 v2.5.2
 )
 
@@ -27,7 +28,6 @@ require (
 	github.com/projectdiscovery/chaos-client v0.2.0 // indirect
 	github.com/projectdiscovery/fileutil v0.0.0-20220510111557-fba17e05663f // indirect
 	github.com/projectdiscovery/goflags v0.0.8-0.20220328195035-cc76049ee216 // indirect
-	github.com/projectdiscovery/gologger v1.1.4 // indirect
 	github.com/projectdiscovery/httputil v0.0.0-20210913064028-815c8db933ff // indirect
 	github.com/projectdiscovery/iputil v0.0.0-20220523161810-f7ec74d057fb // indirect
 	github.com/projectdiscovery/mapcidr v0.0.9 // indirect
