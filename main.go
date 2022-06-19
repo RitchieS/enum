@@ -8,6 +8,7 @@ import (
 	"io"
 	"log"
 	"os"
+	"sort"
 	"strings"
 
 	"github.com/projectdiscovery/dnsx/libs/dnsx"
@@ -16,6 +17,7 @@ import (
 	"github.com/projectdiscovery/subfinder/v2/pkg/passive"
 	"github.com/projectdiscovery/subfinder/v2/pkg/resolve"
 	"github.com/projectdiscovery/subfinder/v2/pkg/runner"
+	"go.uber.org/ratelimit"
 )
 
 type Result struct {
@@ -90,28 +92,51 @@ func main() {
 	var domains []Result
 	domainList := strings.Split(string(data), "\n")
 
+	rl := ratelimit.New(10)
+
 	for i, line := range domainList {
 		percentage := percentage(i+1, len(domainList))
-		// every 5 percent, print a progress bar
-		if int(percentage)%5 == 0 && !*silent {
+		if int(percentage)%2 == 0 && !*silent {
 			fmt.Printf("\r[%s] %.2f%%", percentageBar(percentage), percentage)
 		}
 
-		if line != "" {
-			domain, err := d.QueryOne(line)
-			if err == nil && domain.A != nil {
-				domains = append(domains, Result{Domain: line, A: domain.A})
-			} else {
-				continue
+		if line == "" {
+			continue
+		}
+
+		go func(s string) {
+			result, err := d.QueryOne(s)
+			if err != nil {
+				gologger.Error().Msg(err.Error())
+				return
 			}
+
+			if !contains(domains, s) {
+				domains = append(domains, Result{Domain: line, A: result.A})
+			}
+		}(line)
+
+		rl.Take()
+	}
+
+	// remove duplicates
+	var uniqueDomains []Result
+	for _, domain := range domains {
+		if !contains(uniqueDomains, domain.Domain) {
+			uniqueDomains = append(uniqueDomains, domain)
 		}
 	}
+
+	// sort by domain
+	sort.Slice(uniqueDomains, func(i, j int) bool {
+		return uniqueDomains[i].Domain < uniqueDomains[j].Domain
+	})
 
 	if !*silent {
 		fmt.Printf("\n")
 	}
 
-	for _, domain := range domains {
+	for _, domain := range uniqueDomains {
 		if *showA {
 			fmt.Printf("%s: %s\n", domain.Domain, domain.A)
 		} else {
@@ -119,7 +144,7 @@ func main() {
 		}
 	}
 
-	gologger.Info().Msgf("Found %d active domains for %s", len(domains), *domain)
+	gologger.Info().Msgf("Found %d active domains for %s", len(uniqueDomains), *domain)
 
 	if *output != "" {
 		f, err := os.Create(*output)
@@ -136,7 +161,7 @@ func main() {
 			}
 		}
 
-		gologger.Info().Msgf("Saved %d active domains for %s to %s", len(domains), *domain, *output)
+		gologger.Info().Msgf("Saved %d active domains for %s to %s", len(uniqueDomains), *domain, *output)
 	}
 }
 
@@ -148,4 +173,13 @@ func percentageBar(percentage float64) string {
 	bar := strings.Repeat("#", (int(percentage)/10)*2)
 	bar += strings.Repeat(" ", (int(100-percentage)/10)*2)
 	return bar
+}
+
+func contains(s []Result, e string) bool {
+	for _, a := range s {
+		if a.Domain == e {
+			return true
+		}
+	}
+	return false
 }
